@@ -1,0 +1,5 @@
+pytorch-lightning==1.6.3
+torchmetrics==0.8.2
+librosa==0.9.1
+wandb==0.12.16
+einops==0.4.1
