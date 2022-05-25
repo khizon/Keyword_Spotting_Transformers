@@ -179,7 +179,7 @@ class KWSDataModule(LightningDataModule):
             wavs.append(waveform)
 
         mels = torch.stack(mels)
-        mels = rearrange(mels, 'b c (p1 h) (p2 w) -> b (p1 p2) (c h w)', p1=self.patch_num, p2=self.patch_num)
+        mels = rearrange(mels, 'b c (p1 h) (p2 w) -> b (p1 p2) (c h w)', p1=1, p2=self.patch_num)
         labels = torch.stack(labels)
         wavs = torch.stack(wavs)
    
@@ -423,7 +423,7 @@ def get_args():
     parser.add_argument('--depth', type=int, default=12, help='depth')
     parser.add_argument('--embed_dim', type=int, default=128, help='embedding dimension')
     parser.add_argument('--num_heads', type=int, default=4, help='num_heads')
-    parser.add_argument('--patch_num', type=int, default=8, help='patch_num')
+    parser.add_argument('--patch_num', type=int, default=16, help='patch_num')
     
     parser.add_argument('--batch_size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: )')
