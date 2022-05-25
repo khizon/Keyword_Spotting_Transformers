@@ -2,3 +2,5 @@ pytorch-lightning==1.6.3
 torchmetrics==0.8.2
 wandb==0.12.16
 einops==0.4.1
+SoundFile==0.10.3.post1
+ipywidgets==7.7.0
