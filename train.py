@@ -295,16 +295,21 @@ def init_weights_vit_timm(module: nn.Module):
 
 class LitTransformer(LightningModule):
     def __init__(self, num_classes=10, lr=0.001, max_epochs=30, depth=12, embed_dim=64,
-                 head=4, patch_dim=192, seqlen=16, **kwargs):
+                 head=4, patch_dim=192, seqlen=16, num_patches=16, **kwargs):
         super().__init__()
         self.save_hyperparameters()
         self.encoder = Transformer(dim=embed_dim, num_heads=head, num_blocks=depth, mlp_ratio=4.,
                                    qkv_bias=False, act_layer=nn.GELU, norm_layer=nn.LayerNorm)
         self.embed = torch.nn.Linear(patch_dim, embed_dim)
-
-        self.fc = nn.Linear(seqlen * embed_dim, num_classes)
+        
+        # self.fc = nn.Linear((seqlen * embed_dim) + embed_dim, num_classes)
+        self.fc = Mlp((seqlen*embed_dim)+embed_dim, num_classes)
         self.loss = torch.nn.CrossEntropyLoss()
         
+        self.cls_token = nn.Parameter(torch.randn(1,1, embed_dim))
+        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, embed_dim))
+        self.dropout = nn.Dropout(0.1)
+
         self.reset_parameters()
 
 
@@ -315,7 +320,13 @@ class LitTransformer(LightningModule):
     def forward(self, x):
         # Linear projection
         x = self.embed(x)
-            
+
+        b, n, _ = x.shape
+        cls_token = repeat(self.cls_token, '() n d -> b n d', b=b)
+        x = torch.cat((cls_token, x), dim=1)
+        x = x + self.pos_embedding[:, :(n+1)]
+        x = self.dropout(x)
+           
         # Encoder
         x = self.encoder(x)
         x = x.flatten(start_dim=1)
