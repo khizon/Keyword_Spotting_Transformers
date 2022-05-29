@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
-# get_ipython().run_line_magic('pip', 'install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113')
-# get_ipython().run_line_magic('pip', 'install pytorch-lightning --q --upgrade')
-# get_ipython().run_line_magic('pip', 'install torchmetrics --q --upgrade')
+# %pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+# %pip install pytorch-lightning --q --upgrade
+# %pip install torchmetrics --q --upgrade
 
-# get_ipython().run_line_magic('pip', 'install wandb --q')
-# get_ipython().run_line_magic('pip', 'install einops --q')
-# get_ipython().run_line_magic('pip', 'install soundfile --q')
-# get_ipython().run_line_magic('pip', 'install ipywidgets --q')
+# %pip install wandb --q
+# %pip install einops --q
+# %pip install soundfile --q
+# %pip install ipywidgets --q
 # sudo apt-get install libsndfile1
 
 
@@ -39,7 +39,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torchmetrics.functional import accuracy
 
-from einops import rearrange
+from einops import rearrange, repeat
 
 
 # ## Data Module
@@ -302,8 +302,8 @@ class LitTransformer(LightningModule):
                                    qkv_bias=False, act_layer=nn.GELU, norm_layer=nn.LayerNorm)
         self.embed = torch.nn.Linear(patch_dim, embed_dim)
         
-        # self.fc = nn.Linear((seqlen * embed_dim) + embed_dim, num_classes)
-        self.fc = Mlp((seqlen*embed_dim)+embed_dim, num_classes)
+        self.fc = nn.Linear((seqlen * embed_dim) + embed_dim, num_classes)
+        # self.fc = Mlp((seqlen*embed_dim)+embed_dim, num_classes)
         self.loss = torch.nn.CrossEntropyLoss()
         
         self.cls_token = nn.Parameter(torch.randn(1,1, embed_dim))
@@ -433,10 +433,10 @@ def get_args():
     # model hyperparameters
     parser.add_argument('--depth', type=int, default=12, help='depth')
     parser.add_argument('--embed_dim', type=int, default=128, help='embedding dimension')
-    parser.add_argument('--num_heads', type=int, default=4, help='num_heads')
+    parser.add_argument('--num_heads', type=int, default=2, help='num_heads')
     parser.add_argument('--patch_num', type=int, default=16, help='patch_num')
     
-    parser.add_argument('--batch_size', type=int, default=64, metavar='N',
+    parser.add_argument('--batch_size', type=int, default=256, metavar='N',
                         help='input batch size for training (default: )')
     parser.add_argument('--max-epochs', type=int, default=30, metavar='N',
                         help='number of epochs to train (default: 0)')
@@ -478,13 +478,11 @@ def plot_waveform(waveform, sample_rate, title="Waveform", xlim=None, ylim=None)
 
 # ## Trainer
 
-# In[13]:
+# In[17]:
 
 
 if __name__ == "__main__":
     os.system('python setup.py')
-    
-    
     args = get_args()
     CLASSES = ['silence', 'unknown', 'backward', 'bed', 'bird', 'cat', 'dog', 'down', 'eight', 'five', 'follow',
                'forward', 'four', 'go', 'happy', 'house', 'learn', 'left', 'marvin', 'nine', 'no',
@@ -507,14 +505,12 @@ if __name__ == "__main__":
     data = iter(datamodule.train_dataloader()).next()
     patch_dim = data[0].shape[-1]
     seqlen = data[0].shape[-2]
-    print("Embed dim:", args.embed_dim)
-    print("Patch size:", 32 // args.patch_num)
-    print("Sequence length:", seqlen)
+    print(f'Data shape: {data[0].shape}')
 
 
     model = LitTransformer(num_classes=args.num_classes, lr=args.lr, epochs=args.max_epochs, 
                            depth=args.depth, embed_dim=args.embed_dim, head=args.num_heads,
-                           patch_dim=patch_dim, seqlen=seqlen,)
+                           patch_dim=patch_dim, seqlen=seqlen, num_patches=args.patch_num,)
 
     # wandb is a great way to debug and visualize this model
     wandb_logger = WandbLogger(project="pl-kws", log_model="all")
@@ -528,7 +524,7 @@ if __name__ == "__main__":
         mode='max',
     )
     
-    early_stop_callback = EarlyStopping(monitor="val_acc", min_delta=0.50, patience=5, verbose=False, mode="max")
+    early_stop_callback = EarlyStopping(monitor="val_acc", min_delta=0.25, patience=5, verbose=False, mode="max")
     
     idx_to_class = {v: k for k, v in CLASS_TO_IDX.items()}
     trainer = Trainer(accelerator=args.accelerator,
@@ -537,7 +533,7 @@ if __name__ == "__main__":
                       max_epochs=args.max_epochs,
                       logger=wandb_logger if not args.no_wandb else None,
                       gradient_clip_val=0.5,
-                      callbacks=[model_checkpoint, early_stop_callback, WandbCallback() if not args.no_wandb else None])
+                      callbacks=[model_checkpoint, early_stop_callback])
     model.hparams.sample_rate = datamodule.sample_rate
     model.hparams.idx_to_class = idx_to_class
     trainer.fit(model, datamodule=datamodule)

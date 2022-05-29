@@ -35,6 +35,8 @@ import sounddevice as sd
 import time
 import validators
 from torchvision.transforms import ToTensor
+import os
+from train import *
 
 
 def get_args():
@@ -45,8 +47,8 @@ def get_args():
     parser.add_argument("--win-length", type=int, default=None)
     parser.add_argument("--hop-length", type=int, default=512)
     parser.add_argument("--wav-file", type=str, default=None)
-    parser.add_argument("--checkpoint", type=str, default="https://github.com/roatienza/Deep-Learning-Experiments/releases/download/models/resnet18-kws-best-acc.pt")
-    parser.add_argument("--gui", default=False, action="store_true")
+    parser.add_argument("--checkpoint", type=str, default="https://github.com/khizon/Keyword_Spotting_Transformers/releases/download/v0/model.ckpt")
+    parser.add_argument("--gui", default=True, action="store_true")
     parser.add_argument("--rpi", default=False, action="store_true")
     parser.add_argument("--threshold", type=float, default=0.6)
     args = parser.parse_args()
@@ -55,6 +57,7 @@ def get_args():
 
 # main routine
 if __name__ == "__main__":
+    os.system('python setup.py')
     CLASSES = ['silence', 'unknown', 'backward', 'bed', 'bird', 'cat', 'dog', 'down', 'eight', 'five', 'follow',
                'forward', 'four', 'go', 'happy', 'house', 'learn', 'left', 'marvin', 'nine', 'no',
                'off', 'on', 'one', 'right', 'seven', 'sheila', 'six', 'stop', 'three',
@@ -73,7 +76,11 @@ if __name__ == "__main__":
         checkpoint = args.checkpoint
 
     print("Loading model checkpoint: ", checkpoint)
-    scripted_module = torch.jit.load(checkpoint)
+    # scripted_module = torch.jit.load(checkpoint)
+    scripted_module = LitTransformer(num_classes=37, depth=12, embed_dim=128, head=2,
+                           patch_dim=256, seqlen=16, num_patches=16)
+    scripted_module = scripted_module.load_from_checkpoint('model.ckpt')
+    scripted_module.eval()
 
     if args.gui:
         import PySimpleGUI as sg
@@ -102,13 +109,12 @@ if __name__ == "__main__":
 
     transform = torchvision.transforms.Compose([
             torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate,
-                                                              n_fft=self.n_fft,
-                                                              win_length=self.win_length,
-                                                              hop_length=self.hop_length,
-                                                              n_mels=self.n_mels,
+                                                              n_fft=args.n_fft,
+                                                              win_length=args.win_length,
+                                                              hop_length=args.hop_length,
+                                                              n_mels=args.n_mels,
                                                               power=2.0),
             torchaudio.transforms.AmplitudeToDB(),
-            # torchvision.transforms.Resize((self.n_mels,self.n_mels))
         ])
     if not args.gui:
         mel = transform(waveform)
@@ -143,7 +149,9 @@ if __name__ == "__main__":
         start_time = time.time()
 
         waveform = torch.from_numpy(waveform).unsqueeze(0)
+
         mel = transform(waveform)
+        mel = rearrange(mel, 'c (p1 h) (p2 w) -> (p1 p2) (c h w)', p1=1, p2=16)
         mel = mel.unsqueeze(0)
         pred = scripted_module(mel)
         pred = torch.functional.F.softmax(pred, dim=1)
