@@ -8,3 +8,4 @@ PySimpleGUI==4.60.1
 sounddevice==0.4.4
 librosa==0.9.1
 validators==0.19.0
+matplotlib==3.5.2
